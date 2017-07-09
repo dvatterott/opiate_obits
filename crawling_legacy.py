@@ -1,26 +1,53 @@
-import requests
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
 import re
+from math import ceil
+from time import sleep
 
-header_data = {
-        'Accept-Encoding': 'gzip, deflate, sdch',
-        'Accept-Language': 'en-US,en;q=0.8',
-        'Upgrade-Insecure-Requests': '1',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64)'
-        ' AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.82 '
-        'Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9'
-        ',image/webp,*/*;q=0.8',
-        'Cache-Control': 'max-age=0',
-        'Connection': 'keep-alive'
-    }
+window = True
+
+if window:
+    driver = webdriver.Firefox()
+else:
+    driver = webdriver.PhantomJS()
 
 search_term = 'opiate'
-
 legacy_page = '''http://www.legacy.com/obituaries/legacy/obituary-search.aspx?
 daterange=99999&keyword={}&countryid=0&stateid=all
 &affiliateid=all'''.format(search_term)
 
-response = requests.get(legacy_page, headers=header_data)
+driver.get(legacy_page)
 
-dt_query = '<a href=".+?">.+? \((\d{4})-(\d{4})\)</a>'
-age_list = re.compile(dt_query, re.DOTALL).findall(response.text)
+result_id = ('ctl00_ctl00_ContentPlaceHolder1_'
+             'ContentPlaceHolder1_uxSearchLinks_Message')
+results_count = driver.find_elements_by_id(result_id)
+num_results = int(results_count[0].text.split(' ')[0])
+
+# scroll to bottom
+name_list = [0]
+while len(name_list) < num_results:
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    temp = driver.find_elements_by_class_name("obitName")
+    if len(temp) == len(name_list):
+        sleep(0.5)
+    else:
+        name_list = temp
+
+obit_dict = {}
+obit_dict['birth'] = []
+obit_dict['death'] = []
+obit_dict['obit_text'] = []
+
+name_list = driver.find_elements_by_class_name("obitName")
+text_list = driver.find_elements_by_class_name("ObitHtml")
+print(len(name_list))
+
+# for name, text in zip(name_list, text_list):
+#     # query = '(.+?) \((\d{4}) - (\d{4})\)'
+#     query = '\((\d{4}) - (\d{4})\)'
+#     found = re.compile(query, re.DOTALL).findall(name.text)
+#     obit_dict['birth'].append(int(found[0][0]))
+#     obit_dict['death'].append(int(found[[0][1]]))
+#     obit_dict['obit_text'].append(text.text)
+
+# driver.close()
