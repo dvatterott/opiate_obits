@@ -26,10 +26,11 @@ num_results = int(results_count[0].text.split(' ')[0])
 obit_dict = {}
 obit_dict['birth'] = []
 obit_dict['death'] = []
+name_dict = {}
 obit_dict['obit_text'] = []
 
 read_more_list = ["ReadMore", "readMoreLink"]
-obit_text_class = ["ObitTextContent", "full"]
+obit_text_class = ["ObitTextContent", "full", "ObitTextHtml", "donatic_div"]
 
 
 def find_content(driver, class_list):
@@ -39,15 +40,24 @@ def find_content(driver, class_list):
         count += 1
         if count >= len(class_list):
             return []
-        output = driver.find_elements_by_class_name(read_more_list[count])
+        output = driver.find_elements_by_class_name(class_list[count])
     return output[0]
+
+
+def test_repeat_name(name, name_dict):
+    name = name.lower()
+    if name in name_dict:
+        return 0, name_dict
+    else:
+        name_dict[name] = None
+        return 1, name_dict
 
 
 for i in range(num_results):
     name_list = driver.find_elements_by_class_name("obitName")
 
     # scroll to bottom
-    while len(name_list) < i:
+    while len(name_list) <= i:
         driver.execute_script(
             "window.scrollTo(0, document.body.scrollHeight);")
         temp = driver.find_elements_by_class_name("obitName")
@@ -64,27 +74,37 @@ for i in range(num_results):
     button = button_links[i]
 
     # query = '(.+?) \((\d{4}) - (\d{4})\)'
-    query = '\((\d{4}) - (\d{4})\)'
+    query = '(.+?) \((\d{4}) - (\d{4})\)'
     found = re.compile(query, re.DOTALL).findall(name.text)
     if len(found) > 0:
-        obit_dict['birth'].append(int(found[0][0]))
-        obit_dict['death'].append(int(found[0][1]))
+        name = found[0][0]
+        birth = int(found[0][1])
+        death = int(found[0][2])
     else:
-        obit_dict['birth'].append(None)
-        obit_dict['death'].append(None)
-    # obit_dict['obit_text'].append(text.text)
-    button.click()
+        name = name.text
+        birth = None
+        death = None
 
-    read_more = find_content(driver, read_more_list)
-    try:
-        read_more.click()
-    except:
-        pass
+    repeat, name_dict = test_repeat_name(name, name_dict)
+    if repeat:
+        obit_dict['birth'].append(birth)
+        obit_dict['death'].append(death)
 
-    obit_text = find_content(driver, obit_text_class)
-    obit_dict['obit_text'].append(obit_text.text)
+        button.click()
 
-    driver.execute_script("window.history.go(-1)")
-    driver.back()
+        read_more = find_content(driver, read_more_list)
+        try:
+            read_more.click()
+        except:
+            pass
+
+        obit_text = find_content(driver, obit_text_class)
+        if obit_text:
+            obit_dict['obit_text'].append(obit_text.text)
+        else:
+            print(name)
+
+        driver.execute_script("window.history.go(-1)")
+        driver.back()
 
 # driver.close()
