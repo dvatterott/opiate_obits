@@ -1,29 +1,43 @@
-from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
+'''Collect data from legacy.com using selenium.'''
+import pickle
 import re
-from math import ceil
 from time import sleep
+from selenium import webDRIVER
 
-window = True
+WINDOW = True
 
-if window:
-    driver = webdriver.Firefox()
+if WINDOW:
+    DRIVER = webDRIVER.Firefox()
 else:
-    driver = webdriver.PhantomJS()
+    DRIVER = webDRIVER.PhantomJS()
+    # Phantomjs binary available at
+    # /usr/local/lib/node_modules/phantomjs-prebuilt/lib/phantom/bin/phantomjs
 
-search_term = 'opiate'
-legacy_page = '''http://www.legacy.com/obituaries/legacy/obituary-search.aspx?
-daterange=99999&keyword={}&countryid=0&stateid=all
-&affiliateid=all'''.format(search_term)
 
-driver.get(legacy_page)
+SEARCH_TERM = 'heroin'
+LEGACY_PAGE = ('http://www.legacy.com/obituaries/legacy/obituary-search.aspx?'
+               'daterange=99999&keyword={}&countryid=0&stateid=all'
+               '&affiliateid=all'.format(SEARCH_TERM))
+
+
+DRIVER.get(LEGACY_PAGE)
 
 result_id = ('ctl00_ctl00_ContentPlaceHolder1_'
              'ContentPlaceHolder1_uxSearchLinks_Message')
-results_count = driver.find_elements_by_id(result_id)
-num_results = int(results_count[0].text.split(' ')[0])
+results_count = DRIVER.find_elements_by_id(result_id)
+results_count = results_count[0].text.split(' ')[0]
+if results_count == '1000+':
+    num_results = 1000
+    open_results_id = ('ctl00_ctl00_ContentPlaceHolder1_ContentPlaceHolder1'
+                       '_uxSearchLinks_ViewAllLink')
+    DRIVER.find_elements_by_id(open_results_id)[0].click()
+else:
+    num_results = int(results_count)
 
 obit_dict = {}
+# load obit_dict if exists and use it.
+# with open(search_term + '.pkl', 'wb') as f:
+#     pickle.dump(obit_dict, f, pickle.HIGHEST_PROTOCOL)
 obit_dict['birth'] = []
 obit_dict['death'] = []
 name_dict = {}
@@ -31,16 +45,18 @@ obit_dict['obit_text'] = []
 
 read_more_list = ["ReadMore", "readMoreLink"]
 obit_text_class = ["ObitTextContent", "full", "ObitTextHtml", "donatic_div"]
+bad_word_list = ['heroine', 'Dr.', 'director', 'Director',
+                 'Chairman', 'PhD', 'heroines']
 
 
-def find_content(driver, class_list):
+def find_content(DRIVER, class_list):
     count = 0
-    output = driver.find_elements_by_class_name(class_list[count])
+    output = DRIVER.find_elements_by_class_name(class_list[count])
     while len(output) < 1:
         count += 1
         if count >= len(class_list):
             return []
-        output = driver.find_elements_by_class_name(class_list[count])
+        output = DRIVER.find_elements_by_class_name(class_list[count])
     return output[0]
 
 
@@ -54,20 +70,20 @@ def test_repeat_name(name, name_dict):
 
 
 for i in range(num_results):
-    name_list = driver.find_elements_by_class_name("obitName")
+    name_list = DRIVER.find_elements_by_class_name("obitName")
 
     # scroll to bottom
     while len(name_list) <= i:
-        driver.execute_script(
+        DRIVER.execute_script(
             "window.scrollTo(0, document.body.scrollHeight);")
-        temp = driver.find_elements_by_class_name("obitName")
+        temp = DRIVER.find_elements_by_class_name("obitName")
         if len(temp) == len(name_list):
             sleep(0.5)
         else:
             name_list = temp
 
-    text_list = driver.find_elements_by_class_name("ObitHtml")
-    button_links = driver.find_elements_by_class_name("ViewButtonLink")
+    text_list = DRIVER.find_elements_by_class_name("ObitHtml")
+    button_links = DRIVER.find_elements_by_class_name("ViewButtonLink")
 
     name = name_list[i]
     text = text_list[i]
@@ -90,21 +106,33 @@ for i in range(num_results):
         obit_dict['birth'].append(birth)
         obit_dict['death'].append(death)
 
-        button.click()
+        try:
+            button.click()
+        except:
+            pass
 
-        read_more = find_content(driver, read_more_list)
+        read_more = find_content(DRIVER, read_more_list)
         try:
             read_more.click()
         except:
             pass
 
-        obit_text = find_content(driver, obit_text_class)
+        obit_text = find_content(DRIVER, obit_text_class)
         if obit_text:
+            for bad_words in bad_word_list:
+                if obit_text.text.find(bad_words) > -1:
+                    print('passed on %s' % name)
+                    continue
             obit_dict['obit_text'].append(obit_text.text)
+            print('grabbed %s' % name)
         else:
-            print(name)
+            print('no text for %s' % name)
 
-        driver.execute_script("window.history.go(-1)")
-        driver.back()
+        while DRIVER.current_url != legacy_page:
+            DRIVER.execute_script("window.history.go(-1)")
+            # DRIVER.back()
 
-# driver.close()
+    with open(search_term + '.pkl', 'wb') as f:
+        pickle.dump(obit_dict, f, pickle.HIGHEST_PROTOCOL)
+
+DRIVER.close()
